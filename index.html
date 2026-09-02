@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Prototipo 1.6 — Registro en vivo</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#ffffff">
+<style>
+  :root{
+    --tinta:#0b0f0d; --papel:#ffffff; --linea:#c9d2cc; --suave:#f2f5f3;
+    --acento:#0a6b3d; --alerta:#b91c1c; --aviso:#a16207; --sel:#0a6b3d;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--papel); color:var(--tinta);
+    font:16px/1.35 system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-text-size-adjust:100%; overscroll-behavior:none; user-select:none;
+  }
+  .oculto{display:none !important;}
+
+  /* ---------- pantallas ---------- */
+  #config,#resultados{padding:16px 16px 40px; max-width:640px; margin:0 auto;}
+  h1{font-size:20px; margin:0 0 4px;}
+  h2{font-size:13px; text-transform:uppercase; letter-spacing:.07em; color:#5b6b62;
+     margin:22px 0 8px; font-weight:700;}
+  p.sub{color:#5b6b62; font-size:14px; margin:0 0 18px;}
+  label{display:block; font-size:14px; font-weight:600; margin:12px 0 6px;}
+  input[type=text]{
+    width:100%; min-height:52px; padding:0 12px; font-size:17px;
+    border:2px solid var(--linea); border-radius:10px; background:var(--papel); color:var(--tinta);
+  }
+  .opciones{display:flex; gap:8px;}
+  .opciones button{flex:1;}
+  button{
+    min-height:52px; padding:0 14px; font-size:16px; font-weight:700;
+    background:var(--suave); color:var(--tinta);
+    border:2px solid var(--linea); border-radius:10px; cursor:pointer;
+  }
+  button.activo{background:var(--acento); border-color:var(--acento); color:#fff;}
+  button.primario{width:100%; margin-top:20px; background:var(--acento); border-color:var(--acento); color:#fff; min-height:58px;}
+  button.lineal{width:100%; margin-top:8px;}
+
+  /* ---------- prueba ---------- */
+  #prueba{display:flex; flex-direction:column; height:100dvh;}
+  #instruccion{
+    flex:0 0 auto; padding:10px 12px; background:var(--tinta); color:#fff;
+    display:flex; align-items:center; gap:10px; min-height:76px;
+  }
+  #contador{font-size:13px; opacity:.75; font-variant-numeric:tabular-nums; flex:0 0 auto;}
+  #textoInstruccion{font-size:19px; font-weight:800; line-height:1.2; flex:1;}
+  #reloj{font-size:14px; opacity:.75; font-variant-numeric:tabular-nums; flex:0 0 auto;}
+  #superficie{flex:1 1 auto; position:relative; overflow:hidden; display:flex; flex-direction:column;}
+
+  /* campo */
+  #campo{
+    position:relative; flex:1 1 auto; margin:8px; border:2px solid var(--linea);
+    border-radius:12px; background:
+      linear-gradient(to bottom, #eef6f0, #e3efe7);
+    min-height:180px;
+  }
+  #campo::after{
+    content:""; position:absolute; left:6%; right:6%; top:50%; border-top:2px dashed #bcd0c2;
+  }
+  .ficha{
+    position:absolute; transform:translate(-50%,-50%);
+    width:var(--tam); height:var(--tam); border-radius:50%;
+    background:var(--papel); border:3px solid var(--tinta);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    font-weight:800; line-height:1; text-align:center; overflow:hidden;
+  }
+  .ficha .dorsal{font-size:calc(var(--tam)*0.34);}
+  .ficha .nom{font-size:calc(var(--tam)*0.17); font-weight:700; max-width:92%;
+               overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .ficha .min{font-size:calc(var(--tam)*0.16); color:#5b6b62; font-weight:700;}
+  .ficha.por{border-color:var(--aviso); background:#fffbeb;}
+  .ficha.sel{border-color:var(--sel); background:#d9f0e3; box-shadow:0 0 0 4px rgba(10,107,61,.25);}
+  .ficha.vacio{border-style:dashed; color:#9aa8a0; background:transparent;}
+
+  /* banquillo */
+  #banquillo{
+    flex:0 0 auto; display:flex; gap:8px; overflow-x:auto; padding:6px 8px 10px;
+    border-top:2px solid var(--linea);
+  }
+  #banquillo .ficha{position:static; transform:none; flex:0 0 auto; --tam:58px;}
+  #etiquetaBanquillo{font-size:12px; font-weight:800; color:#5b6b62; padding:6px 10px 0;
+                     text-transform:uppercase; letter-spacing:.06em;}
+
+  /* barra de acciones */
+  #acciones{flex:0 0 auto; display:grid; gap:6px; padding:6px 8px 10px;}
+  #acciones.rejilla{grid-template-columns:repeat(2,1fr); flex:1 1 auto; align-content:center;}
+  #acciones.rejilla button{min-height:88px; font-size:22px;}
+  #acciones.barra{grid-template-columns:repeat(4,1fr);}
+  #acciones button{min-height:64px; font-size:17px;}
+  #acciones button.gol{background:var(--acento); border-color:var(--acento); color:#fff;}
+  #acciones button:disabled{opacity:.35;}
+
+  /* hoja de seleccion */
+  #hoja{
+    position:absolute; inset:0; background:rgba(11,15,13,.55);
+    display:flex; align-items:flex-end; z-index:20;
+  }
+  #hojaCaja{
+    width:100%; max-height:88%; background:var(--papel); border-radius:16px 16px 0 0;
+    padding:10px 10px 16px; overflow:auto;
+  }
+  #hojaTitulo{font-size:14px; font-weight:800; text-transform:uppercase;
+              letter-spacing:.06em; color:#5b6b62; padding:6px 4px 10px;}
+  .listaJug{display:grid; grid-template-columns:repeat(2,1fr); gap:8px;}
+  .listaJug button{min-height:64px; display:flex; align-items:center; gap:8px;
+                   justify-content:flex-start; text-align:left; font-size:16px;}
+  .listaJug .d{font-size:20px; font-weight:800; min-width:32px;}
+  .listaJug .m{margin-left:auto; font-size:13px; color:#5b6b62; font-weight:700;}
+
+  /* feedback */
+  #feedback{
+    position:absolute; left:0; right:0; bottom:0; z-index:30;
+    display:flex; align-items:center; gap:10px; padding:12px;
+    color:#fff; font-weight:800; font-size:16px;
+  }
+  #feedback.ok{background:var(--acento);} #feedback.mal{background:var(--alerta);}
+  #feedback button{background:rgba(255,255,255,.18); border-color:rgba(255,255,255,.6);
+                   color:#fff; margin-left:auto; min-height:44px;}
+
+  .avisoPortero{
+    position:absolute; top:6px; left:50%; transform:translateX(-50%); z-index:10;
+    background:var(--aviso); color:#fff; font-weight:800; font-size:13px;
+    padding:6px 12px; border-radius:999px;
+  }
+
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th,td{text-align:left; padding:6px 4px; border-bottom:1px solid var(--linea);
+        font-variant-numeric:tabular-nums;}
+  th{color:#5b6b62; font-size:11px; text-transform:uppercase;}
+  td.mal{color:var(--alerta); font-weight:800;}
+  .grande{font-size:30px; font-weight:800;}
+  .caja{border:2px solid var(--linea); border-radius:12px; padding:12px; margin-bottom:10px;}
+  pre{white-space:pre-wrap; word-break:break-word; font-size:11px; background:var(--suave);
+      border:1px solid var(--linea); border-radius:8px; padding:8px; max-height:200px; overflow:auto;}
+</style>
+</head>
+<body>
+
+<!-- ============ CONFIGURACIÓN ============ -->
+<section id="config">
+  <h1>Prototipo 1.6 — Registro en vivo</h1>
+  <p class="sub">FUT7APP · Fase 1 · instrumento de medida desechable</p>
+
+  <label for="sujeto">Sujeto</label>
+  <input type="text" id="sujeto" placeholder="Nombre o iniciales" autocomplete="off">
+
+  <label>Disposición</label>
+  <div class="opciones">
+    <button data-disp="A" class="optDisp">A · Rejilla<br><small>acción → jugador</small></button>
+    <button data-disp="B" class="optDisp">B · Alineación<br><small>jugador → acción</small></button>
+  </div>
+
+  <label>Modalidad</label>
+  <div class="opciones">
+    <button data-mod="7" class="optMod">Fútbol 7</button>
+    <button data-mod="11" class="optMod">Fútbol 11</button>
+  </div>
+
+  <label>Orden dentro de la sesión</label>
+  <div class="opciones">
+    <button data-orden="1" class="optOrden">Primera que prueba</button>
+    <button data-orden="2" class="optOrden">Segunda</button>
+  </div>
+
+  <button class="primario" id="btnEmpezar">Empezar</button>
+
+  <h2>Antes de empezar</h2>
+  <p class="sub">
+    De pie, en la calle, con una mano. Alguien lee el guion en voz alta a ritmo de partido: la
+    instrucción también aparece arriba, pero el sujeto no debe esperar a leerla entera.
+    Si te equivocas, sigue: el prototipo lo anota y corrige el estado solo.
+  </p>
+</section>
+
+<!-- ============ PRUEBA ============ -->
+<section id="prueba" class="oculto">
+  <div id="instruccion">
+    <div id="contador">0/0</div>
+    <div id="textoInstruccion">—</div>
+    <div id="reloj">0'</div>
+  </div>
+  <div id="superficie">
+    <div id="campo"></div>
+    <div id="etiquetaBanquillo" class="oculto">Banquillo</div>
+    <div id="banquillo" class="oculto"></div>
+    <div id="acciones"></div>
+    <div id="hoja" class="oculto"><div id="hojaCaja">
+      <div id="hojaTitulo">—</div>
+      <div class="listaJug" id="hojaLista"></div>
+    </div></div>
+    <div id="feedback" class="oculto"></div>
+  </div>
+</section>
+
+<!-- ============ RESULTADOS ============ -->
+<section id="resultados" class="oculto">
+  <h1>Resultados</h1>
+  <p class="sub" id="cabeceraResultados">—</p>
+  <div id="resumen"></div>
+  <h2>Operación a operación</h2>
+  <div style="overflow:auto"><table id="tabla"></table></div>
+  <button class="lineal" id="btnExportar">Exportar JSON</button>
+  <button class="lineal" id="btnCopiar">Copiar al portapapeles</button>
+  <button class="lineal" id="btnOtra">Otra sesión</button>
+  <h2>Datos en bruto</h2>
+  <pre id="bruto">—</pre>
+</section>
+
+<script>
+'use strict';
+
+/* ================= datos de plantilla ================= */
+
+const APELLIDOS = ['Molina','Cuesta','Vega','Ortiz','Peña','Ramos','Sáez','Nieto','Roldán','Prieto',
+  'Bravo','Duarte','Gallego','Herrera','Ibáñez','Jurado','Lozano','Mateo','Navas','Olmo',
+  'Pardo','Quintana','Rivas','Solís'];
+
+function crearPlantilla(n) {
+  const j = [];
+  for (let i = 0; i < n; i++) {
+    j.push({ id: 'j' + i, dorsal: i + 1, nombre: APELLIDOS[i % APELLIDOS.length], minutos: 0 });
+  }
+  return j;
+}
+
+const HUECOS7 = [
+  { c:'POR', x:50, y:90 }, { c:'DFI', x:20, y:70 }, { c:'DFC', x:50, y:74 }, { c:'DFD', x:80, y:70 },
+  { c:'MCI', x:32, y:47 }, { c:'MCD', x:68, y:47 }, { c:'DC', x:50, y:22 }
+];
+const HUECOS11 = [
+  { c:'POR', x:50, y:93 },
+  { c:'LI', x:14, y:76 }, { c:'DFI', x:38, y:79 }, { c:'DFD', x:62, y:79 }, { c:'LD', x:86, y:76 },
+  { c:'MI', x:14, y:52 }, { c:'MCI', x:38, y:55 }, { c:'MCD', x:62, y:55 }, { c:'MD', x:86, y:52 },
+  { c:'DCI', x:40, y:24 }, { c:'DCD', x:60, y:24 }
+];
+
+/* ================= generador determinista ================= */
+
+function rng(semilla) {
+  let s = semilla >>> 0;
+  return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+}
+
+const PATRON = ['GOL','SUS','SUS','TAR','SUS','GOL','POS','SUS','NOTA','SUS',
+                'GOL','TAR','SUS','PORTERO_POS','PORTERO_SUS','SUS','GOL','SUS','POS','SUS'];
+
+/**
+ * Genera el guion contra un estado de referencia. Se ejecuta una sola vez por modalidad,
+ * con semilla fija, para que las dos disposiciones reciban exactamente lo mismo.
+ */
+function generarGuion(modalidad) {
+  const huecos = modalidad === 7 ? HUECOS7 : HUECOS11;
+  const plantilla = crearPlantilla(modalidad === 7 ? 12 : 17);
+  const r = rng(20260901);
+
+  // estado de referencia
+  const campo = huecos.map((h, i) => ({ ...h, jugadorId: plantilla[i].id }));
+  const banquillo = plantilla.slice(huecos.length).map(p => p.id);
+  const minutos = {}; plantilla.forEach(p => minutos[p.id] = 0);
+
+  const elegir = (arr) => arr[Math.floor(r() * arr.length)];
+  const enCampo = () => campo.filter(h => h.jugadorId);
+  const nombre = (id) => { const p = plantilla.find(x => x.id === id); return p.dorsal + ' ' + p.nombre; };
+
+  const guion = [];
+  let porteroLesionadoId = null;
+
+  PATRON.forEach((tipo, idx) => {
+    const minuto = Math.round((idx + 1) * (50 / (PATRON.length + 1)));
+    let op = null;
+
+    if (tipo === 'GOL') {
+      const cands = enCampo().filter(h => h.c !== 'POR');
+      const anotador = elegir(cands).jugadorId;
+      const conAsist = r() < 0.5;
+      let asistente = null;
+      if (conAsist) {
+        const otros = cands.filter(h => h.jugadorId !== anotador);
+        asistente = elegir(otros).jugadorId;
+      }
+      op = { tipo:'GOL', jugador:anotador, asistente,
+             texto:'GOL — marca ' + nombre(anotador) + (asistente ? ', asiste ' + nombre(asistente) : ', sin asistencia') };
+
+    } else if (tipo === 'TAR') {
+      const h = elegir(enCampo());
+      // siempre amarilla: una roja dejaría un hueco vacío que ninguna operación
+      // posterior del guion resuelve, y ese camino no forma parte de lo que se mide
+      const color = 'amarilla';
+      op = { tipo:'TARJETA', jugador:h.jugadorId, color,
+             texto:'TARJETA ' + color.toUpperCase() + ' — ' + nombre(h.jugadorId) };
+
+    } else if (tipo === 'SUS') {
+      const h = elegir(enCampo().filter(x => x.c !== 'POR'));
+      const entraId = elegir(banquillo);
+      op = { tipo:'SUSTITUCION', sale:h.jugadorId, entra:entraId,
+             texto:'CAMBIO — sale ' + nombre(h.jugadorId) + ', entra ' + nombre(entraId) };
+
+    } else if (tipo === 'POS') {
+      const dos = enCampo().filter(x => x.c !== 'POR');
+      const a = elegir(dos);
+      const b = elegir(dos.filter(x => x.jugadorId !== a.jugadorId));
+      op = { tipo:'CAMBIO_POSICION', jugador:a.jugadorId, jugador2:b.jugadorId,
+             texto:'POSICIÓN — ' + nombre(a.jugadorId) + ' y ' + nombre(b.jugadorId) + ' se cambian el puesto' };
+
+    } else if (tipo === 'PORTERO_POS') {
+      const por = campo.find(h => h.c === 'POR');
+      const b = elegir(enCampo().filter(x => x.c !== 'POR'));
+      porteroLesionadoId = por.jugadorId;
+      op = { tipo:'CAMBIO_POSICION', jugador:b.jugadorId, jugador2:por.jugadorId,
+             texto:'PORTERO LESIONADO — ' + nombre(b.jugadorId) + ' se pone de portero' };
+
+    } else if (tipo === 'PORTERO_SUS') {
+      const entraId = elegir(banquillo);
+      op = { tipo:'SUSTITUCION', sale:porteroLesionadoId, entra:entraId,
+             texto:'CAMBIO — sale el lesionado ' + nombre(porteroLesionadoId) + ', entra ' + nombre(entraId) };
+
+    } else if (tipo === 'NOTA') {
+      op = { tipo:'NOTA', texto:'NOTA — anota una observación' };
+    }
+
+    op.id = 'op' + (idx + 1);
+    op.minuto = minuto;
+    guion.push(op);
+
+    // aplicar al estado de referencia
+    aplicar(op, campo, banquillo);
+  });
+
+  return { guion, plantilla, huecos };
+}
+
+function aplicar(op, campo, banquillo) {
+  if (op.tipo === 'SUSTITUCION') {
+    const h = campo.find(x => x.jugadorId === op.sale);
+    if (!h) return;
+    h.jugadorId = op.entra;
+    const i = banquillo.indexOf(op.entra);
+    if (i >= 0) banquillo.splice(i, 1);
+    banquillo.push(op.sale);
+  } else if (op.tipo === 'CAMBIO_POSICION') {
+    const a = campo.find(x => x.jugadorId === op.jugador);
+    const b = campo.find(x => x.jugadorId === op.jugador2);
+    if (!a) return;
+    if (b) { const t = a.jugadorId; a.jugadorId = b.jugadorId; b.jugadorId = t; }
+  } else if (op.tipo === 'TARJETA' && op.color === 'roja') {
+    const h = campo.find(x => x.jugadorId === op.jugador);
+    if (h) h.jugadorId = null;
+  }
+}
+
+/* ================= estado de sesión ================= */
+
+const S = {
+  sujeto:'', disposicion:null, modalidad:null, orden:null,
+  guion:[], plantilla:[], huecos:[], campo:[], banquillo:[],
+  indice:0, registros:[],
+  tReveal:0, tPrimerToque:0, toques:0, desperdiciados:0, deshacer:false,
+  seleccion:null, accionPendiente:null, datosPendientes:null,
+  esperandoAvance:false
+};
+
+const $ = (id) => document.getElementById(id);
+const jug = (id) => S.plantilla.find(p => p.id === id);
+const etiqueta = (id) => { const p = jug(id); return p ? p.dorsal + ' ' + p.nombre : '—'; };
+
+/* ================= configuración ================= */
+
+function activar(clase, attr, valor) {
+  document.querySelectorAll('.' + clase).forEach(b => b.classList.toggle('activo', b.dataset[attr] === valor));
+}
+document.querySelectorAll('.optDisp').forEach(b => b.onclick = () => { S.disposicion = b.dataset.disp; activar('optDisp','disp',S.disposicion); });
+document.querySelectorAll('.optMod').forEach(b => b.onclick = () => { S.modalidad = +b.dataset.mod; activar('optMod','mod',b.dataset.mod); });
+document.querySelectorAll('.optOrden').forEach(b => b.onclick = () => { S.orden = +b.dataset.orden; activar('optOrden','orden',b.dataset.orden); });
+
+$('btnEmpezar').onclick = () => {
+  S.sujeto = $('sujeto').value.trim();
+  if (!S.sujeto || !S.disposicion || !S.modalidad || !S.orden) {
+    alert('Faltan datos de la sesión.'); return;
+  }
+  const g = generarGuion(S.modalidad);
+  S.guion = g.guion; S.plantilla = g.plantilla; S.huecos = g.huecos;
+  S.campo = g.huecos.map((h, i) => ({ ...h, jugadorId: g.plantilla[i].id }));
+  S.banquillo = g.plantilla.slice(g.huecos.length).map(p => p.id);
+  S.indice = 0; S.registros = [];
+  $('config').classList.add('oculto');
+  $('prueba').classList.remove('oculto');
+  construirAcciones();
+  pintar();
+  revelar();
+};
+
+/* ================= flujo de la prueba ================= */
+
+function opActual() { return S.guion[S.indice]; }
+
+function revelar() {
+  const op = opActual();
+  if (!op) { terminar(); return; }
+  S.tReveal = performance.now();
+  S.tPrimerToque = 0; S.toques = 0; S.desperdiciados = 0; S.deshacer = false;
+  S.seleccion = null; S.accionPendiente = null; S.datosPendientes = null;
+  S.esperandoAvance = false;
+  $('contador').textContent = (S.indice + 1) + '/' + S.guion.length;
+  $('textoInstruccion').textContent = op.texto;
+  $('reloj').textContent = op.minuto + "'";
+  pintar();
+}
+
+function toque() {
+  S.toques++;
+  if (!S.tPrimerToque) S.tPrimerToque = performance.now();
+}
+
+function completar(obtenido) {
+  const op = opActual();
+  const ahora = performance.now();
+  const correcto = comparar(op, obtenido);
+  const reg = {
+    id: op.id,
+    tipo: op.tipo,
+    esperado: resumirOp(op),
+    obtenido: resumirOp(obtenido),
+    correcto,
+    segundosTotal: +((ahora - S.tReveal) / 1000).toFixed(2),
+    segundosInteraccion: S.tPrimerToque ? +((ahora - S.tPrimerToque) / 1000).toFixed(2) : null,
+    toques: S.toques,
+    toquesDesperdiciados: S.desperdiciados,
+    deshacerUsado: S.deshacer
+  };
+  S.registros.push(reg);
+
+  // el estado se fuerza al esperado para que el guion siga siendo válido
+  aplicar(op, S.campo, S.banquillo);
+  sumarMinutos(op);
+  S.seleccion = null; S.accionPendiente = null;
+  cerrarHoja();
+  pintar();
+  mostrarFeedback(reg);
+}
+
+function sumarMinutos(op) {
+  const paso = Math.round(50 / (S.guion.length + 1));
+  S.campo.forEach(h => { if (h.jugadorId) { const p = jug(h.jugadorId); if (p) p.minutos += paso; } });
+}
+
+function comparar(esp, obt) {
+  if (esp.tipo !== obt.tipo) return false;
+  if (esp.tipo === 'NOTA') return true;
+  if (esp.tipo === 'GOL') return esp.jugador === obt.jugador && (esp.asistente || null) === (obt.asistente || null);
+  if (esp.tipo === 'TARJETA') return esp.jugador === obt.jugador && esp.color === obt.color;
+  if (esp.tipo === 'SUSTITUCION') return esp.sale === obt.sale && esp.entra === obt.entra;
+  if (esp.tipo === 'CAMBIO_POSICION') {
+    const a = [esp.jugador, esp.jugador2].sort().join('|');
+    const b = [obt.jugador, obt.jugador2].sort().join('|');
+    return a === b;
+  }
+  return false;
+}
+
+function resumirOp(op) {
+  if (!op) return '—';
+  switch (op.tipo) {
+    case 'GOL': return 'gol ' + etiqueta(op.jugador) + (op.asistente ? ' / asist ' + etiqueta(op.asistente) : ' / sin asist');
+    case 'TARJETA': return 'tarjeta ' + op.color + ' ' + etiqueta(op.jugador);
+    case 'SUSTITUCION': return 'sale ' + etiqueta(op.sale) + ' entra ' + etiqueta(op.entra);
+    case 'CAMBIO_POSICION': return 'posición ' + etiqueta(op.jugador) + ' ↔ ' + etiqueta(op.jugador2);
+    case 'NOTA': return 'nota';
+  }
+  return op.tipo;
+}
+
+function mostrarFeedback(reg) {
+  const f = $('feedback');
+  f.className = reg.correcto ? 'ok' : 'mal';
+  f.innerHTML = '<span>' + (reg.correcto ? '✓ ' : '✗ ') + reg.obtenido + '</span>';
+  const b = document.createElement('button');
+  b.textContent = 'Deshacer';
+  b.onclick = (e) => { e.stopPropagation(); deshacer(); };
+  f.appendChild(b);
+  f.classList.remove('oculto');
+  S.esperandoAvance = true;
+  clearTimeout(mostrarFeedback._t);
+  mostrarFeedback._t = setTimeout(() => {
+    if (!S.esperandoAvance) return;
+    f.classList.add('oculto');
+    S.indice++;
+    revelar();
+  }, 2000);
+}
+
+function deshacer() {
+  clearTimeout(mostrarFeedback._t);
+  S.esperandoAvance = false;
+  $('feedback').classList.add('oculto');
+  // se revierte el registro y se repite la misma operación conservando el tiempo original
+  const reg = S.registros.pop();
+  const op = opActual();
+  revertir(op);
+  const p0 = S.tReveal, t0 = S.tPrimerToque, tq = reg ? reg.toques : 0;
+  S.seleccion = null; S.accionPendiente = null;
+  S.tReveal = p0; S.tPrimerToque = t0;
+  S.toques = tq; S.desperdiciados = (reg ? reg.toquesDesperdiciados : 0) + tq;
+  S.deshacer = true;
+  pintar();
+}
+
+function revertir(op) {
+  const paso = Math.round(50 / (S.guion.length + 1));
+  S.campo.forEach(h => { if (h.jugadorId) { const p = jug(h.jugadorId); if (p) p.minutos -= paso; } });
+  if (op.tipo === 'SUSTITUCION') {
+    const h = S.campo.find(x => x.jugadorId === op.entra);
+    if (h) h.jugadorId = op.sale;
+    const i = S.banquillo.indexOf(op.sale);
+    if (i >= 0) S.banquillo.splice(i, 1);
+    S.banquillo.push(op.entra);
+  } else if (op.tipo === 'CAMBIO_POSICION') {
+    const a = S.campo.find(x => x.jugadorId === op.jugador2);
+    const b = S.campo.find(x => x.jugadorId === op.jugador);
+    if (a && b) { const t = a.jugadorId; a.jugadorId = b.jugadorId; b.jugadorId = t; }
+  } else if (op.tipo === 'TARJETA' && op.color === 'roja') {
+    const h = S.campo.find(x => x.jugadorId === null);
+    if (h) h.jugadorId = op.jugador;
+  }
+}
+
+/* ================= pintado ================= */
+
+function pintar() {
+  const campo = $('campo');
+  const tam = S.modalidad === 7 ? 66 : 50;
+  campo.innerHTML = '';
+  campo.style.setProperty('--tam', tam + 'px');
+
+  const sinPortero = !S.campo.find(h => h.c === 'POR' && h.jugadorId);
+  if (sinPortero) {
+    const a = document.createElement('div');
+    a.className = 'avisoPortero';
+    a.textContent = 'Sin portero';
+    campo.appendChild(a);
+  }
+
+  S.campo.forEach((h) => {
+    const d = document.createElement('div');
+    d.className = 'ficha' + (h.c === 'POR' ? ' por' : '') + (!h.jugadorId ? ' vacio' : '');
+    if (S.seleccion === h.jugadorId && h.jugadorId) d.classList.add('sel');
+    d.style.left = h.x + '%'; d.style.top = h.y + '%';
+    d.style.setProperty('--tam', tam + 'px');
+    if (h.jugadorId) {
+      const p = jug(h.jugadorId);
+      d.innerHTML = '<div class="dorsal">' + p.dorsal + '</div>' +
+                    '<div class="nom">' + p.nombre + '</div>' +
+                    '<div class="min">' + p.minutos + "'</div>";
+    } else {
+      d.innerHTML = '<div class="nom">' + h.c + '</div>';
+    }
+    d.onclick = () => onFicha(h);
+    campo.appendChild(d);
+  });
+
+  const banq = $('banquillo');
+  banq.innerHTML = '';
+  S.banquillo.forEach(id => {
+    const p = jug(id);
+    const d = document.createElement('div');
+    d.className = 'ficha' + (S.seleccion === id ? ' sel' : '');
+    d.innerHTML = '<div class="dorsal">' + p.dorsal + '</div>' +
+                  '<div class="nom">' + p.nombre + '</div>' +
+                  '<div class="min">' + p.minutos + "'</div>";
+    d.onclick = () => onBanquillo(id);
+    banq.appendChild(d);
+  });
+
+  const esB = S.disposicion === 'B';
+  $('banquillo').classList.toggle('oculto', !esB);
+  $('etiquetaBanquillo').classList.toggle('oculto', !esB);
+  $('campo').classList.toggle('oculto', !esB);
+  actualizarAcciones();
+}
+
+/* ================= acciones ================= */
+
+function construirAcciones() {
+  const cont = $('acciones');
+  cont.innerHTML = '';
+  cont.className = S.disposicion === 'A' ? 'rejilla' : 'barra';
+  const defs = S.disposicion === 'A'
+    ? [['GOL','gol'],['TARJETA',''],['CAMBIO',''],['POSICIÓN',''],['NOTA','']]
+    : [['GOL','gol'],['TARJETA',''],['NOTA',''],['CANCELAR','']];
+  defs.forEach(([txt, cls]) => {
+    const b = document.createElement('button');
+    b.textContent = txt; if (cls) b.className = cls;
+    b.dataset.accion = txt;
+    b.onclick = () => onAccion(txt);
+    cont.appendChild(b);
+  });
+}
+
+function actualizarAcciones() {
+  if (S.disposicion !== 'B') return;
+  document.querySelectorAll('#acciones button').forEach(b => {
+    const a = b.dataset.accion;
+    if (a === 'NOTA') b.disabled = false;
+    else if (a === 'CANCELAR') b.disabled = !S.seleccion;
+    else b.disabled = !S.seleccion;
+  });
+}
+
+function onAccion(a) {
+  if (S.esperandoAvance) return;
+  toque();
+
+  if (a === 'NOTA') { completar({ tipo:'NOTA' }); return; }
+
+  if (S.disposicion === 'A') {
+    S.accionPendiente = a;
+    if (a === 'GOL') abrirHoja('¿Quién marca?', jugadoresCampo(), (id) => {
+      abrirHoja('¿Asistencia?', jugadoresCampo().filter(x => x !== id), (a2) => {
+        completar({ tipo:'GOL', jugador:id, asistente:a2 });
+      }, 'Sin asistencia', () => completar({ tipo:'GOL', jugador:id, asistente:null }));
+    });
+    else if (a === 'TARJETA') abrirHoja('¿A quién?', jugadoresCampo(), (id) => {
+      abrirHojaColor((color) => completar({ tipo:'TARJETA', jugador:id, color }));
+    });
+    else if (a === 'CAMBIO') abrirHoja('¿Quién sale?', jugadoresCampo(), (sale) => {
+      abrirHoja('¿Quién entra?', S.banquillo.slice(), (entra) => {
+        completar({ tipo:'SUSTITUCION', sale, entra });
+      });
+    });
+    else if (a === 'POSICIÓN') abrirHoja('¿Quién se mueve?', jugadoresCampo(), (j1) => {
+      abrirHoja('¿Con quién?', jugadoresCampo().filter(x => x !== j1), (j2) => {
+        completar({ tipo:'CAMBIO_POSICION', jugador:j1, jugador2:j2 });
+      });
+    });
+    return;
+  }
+
+  // disposición B
+  if (a === 'CANCELAR') { S.desperdiciados++; S.seleccion = null; pintar(); return; }
+  if (!S.seleccion) { S.desperdiciados++; return; }
+  const id = S.seleccion;
+  if (a === 'GOL') {
+    abrirHoja('¿Asistencia?', jugadoresCampo().filter(x => x !== id), (a2) => {
+      completar({ tipo:'GOL', jugador:id, asistente:a2 });
+    }, 'Sin asistencia', () => completar({ tipo:'GOL', jugador:id, asistente:null }));
+  } else if (a === 'TARJETA') {
+    abrirHojaColor((color) => completar({ tipo:'TARJETA', jugador:id, color }));
+  }
+}
+
+function jugadoresCampo() { return S.campo.filter(h => h.jugadorId).map(h => h.jugadorId); }
+
+function onFicha(h) {
+  if (S.esperandoAvance || S.disposicion !== 'B') return;
+  toque();
+  if (!S.seleccion) {
+    if (!h.jugadorId) { S.desperdiciados++; return; }
+    S.seleccion = h.jugadorId; pintar(); return;
+  }
+  if (S.seleccion === h.jugadorId) { S.desperdiciados++; S.seleccion = null; pintar(); return; }
+  // segundo toque sobre el campo → permuta o movimiento a hueco vacío
+  completar({ tipo:'CAMBIO_POSICION', jugador:S.seleccion, jugador2:h.jugadorId || null });
+}
+
+function onBanquillo(id) {
+  if (S.esperandoAvance || S.disposicion !== 'B') return;
+  toque();
+  if (!S.seleccion) { S.seleccion = id; pintar(); return; }
+  if (S.banquillo.includes(S.seleccion)) { S.desperdiciados++; S.seleccion = id; pintar(); return; }
+  completar({ tipo:'SUSTITUCION', sale:S.seleccion, entra:id });
+}
+
+/* ================= hoja de selección ================= */
+
+function abrirHoja(titulo, ids, alElegir, textoExtra, alExtra) {
+  $('hojaTitulo').textContent = titulo;
+  const lista = $('hojaLista');
+  lista.innerHTML = '';
+  if (textoExtra) {
+    const b = document.createElement('button');
+    b.textContent = textoExtra;
+    b.style.gridColumn = '1 / -1';
+    b.onclick = () => { toque(); alExtra(); };
+    lista.appendChild(b);
+  }
+  ids.forEach(id => {
+    const p = jug(id);
+    const b = document.createElement('button');
+    b.innerHTML = '<span class="d">' + p.dorsal + '</span><span>' + p.nombre + '</span>' +
+                  '<span class="m">' + p.minutos + "'</span>";
+    b.onclick = () => { toque(); alElegir(id); };
+    lista.appendChild(b);
+  });
+  $('hoja').classList.remove('oculto');
+}
+
+function abrirHojaColor(alElegir) {
+  $('hojaTitulo').textContent = 'Color';
+  const lista = $('hojaLista');
+  lista.innerHTML = '';
+  [['Amarilla','amarilla'],['Roja','roja']].forEach(([t, v]) => {
+    const b = document.createElement('button');
+    b.textContent = t;
+    b.onclick = () => { toque(); alElegir(v); };
+    lista.appendChild(b);
+  });
+  $('hoja').classList.remove('oculto');
+}
+
+function cerrarHoja() { $('hoja').classList.add('oculto'); }
+
+/* ================= resultados ================= */
+
+function mediana(v) {
+  if (!v.length) return null;
+  const s = v.slice().sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return +(s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2).toFixed(2);
+}
+function p90(v) {
+  if (!v.length) return null;
+  const s = v.slice().sort((a, b) => a - b);
+  return +s[Math.min(s.length - 1, Math.ceil(s.length * 0.9) - 1)].toFixed(2);
+}
+
+function terminar() {
+  $('prueba').classList.add('oculto');
+  $('resultados').classList.remove('oculto');
+
+  const R = S.registros;
+  const totales = R.map(r => r.segundosTotal);
+  const errores = R.filter(r => !r.correcto).length;
+  const tasa = R.length ? Math.round((errores / R.length) * 100) : 0;
+  const medTotal = mediana(totales);
+
+  const porTipo = {};
+  R.forEach(r => { (porTipo[r.tipo] = porTipo[r.tipo] || []).push(r); });
+
+  const pasa = medTotal !== null && medTotal <= 5 && tasa <= 10;
+
+  $('cabeceraResultados').textContent =
+    S.sujeto + ' · disposición ' + S.disposicion + ' · fútbol ' + S.modalidad +
+    ' · ' + (S.orden === 1 ? 'primera' : 'segunda') + ' de la sesión';
+
+  let html = '<div class="caja"><div class="grande" style="color:' +
+    (pasa ? 'var(--acento)' : 'var(--alerta)') + '">' +
+    (pasa ? 'PASA LA PUERTA' : 'NO PASA') + '</div>' +
+    '<div style="color:#5b6b62;font-size:14px;margin-top:4px">Umbrales: mediana ≤ 5 s y error ≤ 10 %</div></div>';
+
+  html += '<div class="caja"><table>' +
+    fila('Mediana total (desde la instrucción)', medTotal + ' s') +
+    fila('Percentil 90 total', p90(totales) + ' s') +
+    fila('Mediana de interacción (desde el 1.er toque)', mediana(R.map(r => r.segundosInteraccion).filter(x => x != null)) + ' s') +
+    fila('Tasa de error', tasa + ' % (' + errores + '/' + R.length + ')') +
+    fila('Toques desperdiciados', R.reduce((a, r) => a + r.toquesDesperdiciados, 0)) +
+    fila('Deshacer usado', R.filter(r => r.deshacerUsado).length + ' veces') +
+    '</table></div>';
+
+  html += '<h2>Por tipo de operación</h2><div class="caja"><table>' +
+    '<tr><th>Tipo</th><th>N</th><th>Mediana</th><th>P90</th><th>Errores</th></tr>';
+  Object.keys(porTipo).forEach(t => {
+    const g = porTipo[t];
+    const ts = g.map(r => r.segundosTotal);
+    html += '<tr><td>' + t + '</td><td>' + g.length + '</td><td>' + mediana(ts) + ' s</td>' +
+            '<td>' + p90(ts) + ' s</td><td>' + g.filter(r => !r.correcto).length + '</td></tr>';
+  });
+  html += '</table></div>';
+  $('resumen').innerHTML = html;
+
+  let tb = '<tr><th>#</th><th>Tipo</th><th>Total</th><th>Inter.</th><th>Toques</th><th>Resultado</th></tr>';
+  R.forEach((r, i) => {
+    tb += '<tr><td>' + (i + 1) + '</td><td>' + r.tipo + '</td><td>' + r.segundosTotal + '</td>' +
+          '<td>' + (r.segundosInteraccion ?? '—') + '</td><td>' + r.toques +
+          (r.toquesDesperdiciados ? ' (+' + r.toquesDesperdiciados + ')' : '') + '</td>' +
+          '<td class="' + (r.correcto ? '' : 'mal') + '">' +
+          (r.correcto ? '✓' : '✗ ' + r.obtenido) + '</td></tr>';
+  });
+  $('tabla').innerHTML = tb;
+  $('bruto').textContent = JSON.stringify(paquete(), null, 2);
+}
+
+function fila(k, v) { return '<tr><td>' + k + '</td><td style="text-align:right;font-weight:700">' + v + '</td></tr>'; }
+
+function paquete() {
+  const R = S.registros;
+  const totales = R.map(r => r.segundosTotal);
+  return {
+    prototipo:'fut7app-1.6',
+    fecha:new Date().toISOString(),
+    sujeto:S.sujeto, disposicion:S.disposicion, modalidad:S.modalidad, orden:S.orden,
+    ua:navigator.userAgent,
+    resumen:{
+      operaciones:R.length,
+      medianaTotalSeg:mediana(totales),
+      p90TotalSeg:p90(totales),
+      medianaInteraccionSeg:mediana(R.map(r => r.segundosInteraccion).filter(x => x != null)),
+      tasaErrorPct:R.length ? Math.round((R.filter(r => !r.correcto).length / R.length) * 100) : 0,
+      toquesDesperdiciados:R.reduce((a, r) => a + r.toquesDesperdiciados, 0)
+    },
+    registros:R
+  };
+}
+
+$('btnExportar').onclick = () => {
+  const blob = new Blob([JSON.stringify(paquete(), null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '1-6-' + S.sujeto.replace(/[^\w-]+/g, '-') + '-' + S.disposicion + '-f' + S.modalidad + '.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+$('btnCopiar').onclick = async () => {
+  try { await navigator.clipboard.writeText(JSON.stringify(paquete(), null, 2)); alert('Copiado.'); }
+  catch (e) { alert('No se pudo copiar: ' + e); }
+};
+$('btnOtra').onclick = () => location.reload();
+
+/* mantener la pantalla encendida durante la prueba */
+if ('wakeLock' in navigator) {
+  document.addEventListener('click', function once() {
+    navigator.wakeLock.request('screen').catch(() => {});
+    document.removeEventListener('click', once);
+  });
+}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+</script>
+</body>
+</html>
